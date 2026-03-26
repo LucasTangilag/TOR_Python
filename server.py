@@ -21,13 +21,13 @@ def run_relay(host, cipher):
 	while True:
 
 		# relay has knowledge of previous sender here
-		conn, addr = s.accept()
+		prev_conn, addr = s.accept()
 		print(f"[PID {os.getpid()}] Connection from {addr} -> {host}:{PORT}!", flush=True)
         
 		while True:
 
 			# receive from previous relay
-			data = conn.recv(4096)
+			data = prev_conn.recv(4096)
 			if not data:
 				break
 			print(f"[PID {os.getpid()}] Received from {addr}: {data}", flush=True)
@@ -57,9 +57,11 @@ def run_relay(host, cipher):
 			if next_hop == "FINAL":
 				print(f"[PID {os.getpid()}] Final destination reached with message: {msg}", flush=True)
                 
-				# for now, let's just echo the message back to the client 
+				# get server response, encrypt, and send back
 				response = f"You've successfully reached {host} with message: {msg}"
-				conn.sendall(response.encode())
+				enc_response = backward_encryption(cipher, response)
+				print(f"[PID {os.getpid()}] Send back -> {f"{enc_response}"}", flush=True)
+				prev_conn.sendall(enc_response)
 				break
             
 			# otherwise, forward to next hop
@@ -69,13 +71,26 @@ def run_relay(host, cipher):
 			print(f"[PID {os.getpid()}] Forwarding to {next_hop}:{PORT} -> {f"{msg}"}", flush=True)
 			next_conn.sendall(msg)
 
-			# send response back to previous relay
+			# ecrypt and send response back to previous relay
 			response = next_conn.recv(4096)
-			conn.sendall(response)
+			enc_response = backward_encryption(cipher, response)
+			print(f"[PID {os.getpid()}] Send back -> {f"{enc_response}"}", flush=True)
+			prev_conn.sendall(enc_response)
 
             
-		conn.close()
+		prev_conn.close()
 
+
+def backward_encryption(cipher, message):
+	# encrpyt a message with a nonce and key
+	nonce = os.urandom(12)
+	
+	# if message is a string encode, if not then dont
+	if isinstance(message, str):
+		message = message.encode()
+        
+	layer = nonce + cipher.encrypt(nonce, message, None)
+	return layer
 
 def parse_ips():
 	args = sys.argv[1:]
