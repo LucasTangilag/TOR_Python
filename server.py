@@ -7,6 +7,7 @@ PORT = 8000 # fixed for now
 
 # start relay
 def run_relay(host):
+	# set up lister for host
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((host, PORT))
@@ -34,16 +35,10 @@ def run_relay(host):
                 print(f"[PID {os.getpid()}] Malformed message from {addr}: {raw_msg}", flush=True)
                 break
             
-            # if this is not the exit node, the raw message should be "current_IP|next_IP|message"
+            # if this is not the exit node, the raw message should be "next_IP|message"
             # otherwise, if this *IS* the exit, it's "FINAL|message"
-            try:
-                current_hop, next_hop, msg = raw_msg.split("|", 2)
-            except Exception as e:
-                next_hop, msg = raw_msg.split("|", 1)
-                if next_hop != "FINAL":
-                    print(f"[PID {os.getpid()}] Malformed message from {addr}: {raw_msg}", flush=True)
-                    break
-
+            next_hop, msg = raw_msg.split("|", 1)
+           
             # if this is the exit node, start responding back to client
             if next_hop == "FINAL":
                 print(f"[PID {os.getpid()}] Final destination reached with message: {msg}", flush=True)
@@ -55,8 +50,9 @@ def run_relay(host):
             
             # otherwise, forward to next hop
             next_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            next_conn.bind((host, 0))
             next_conn.connect((next_hop, PORT))
-            print(f"[PID {os.getpid()}] Forwarding to {next_hop}:{PORT} -> {f"{next_hop}|{msg}"}", flush=True)
+            print(f"[PID {os.getpid()}] Forwarding to {next_hop}:{PORT} -> {f"{msg}"}", flush=True)
             next_conn.sendall(msg.encode())
 
             # send response back to previous relay
