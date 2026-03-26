@@ -31,10 +31,24 @@ def main():
 
 			s.sendall(data)
 			recv_data = s.recv(4096)
-			print(f"Received from server: {recv_data.decode()}")
+			reponse = decrypt_response(recv_data, ciphers)
+			print(f"Received from server: {reponse}")
 	except Exception as e:
 		print(f"[Client]: Failed to connect to server {ENTRY}:{PORT} - {e}")
 
+def decrypt_response(data, ciphers):
+	# decrypt each layer
+	onion = data
+	for i in range(3):
+		# extract nonce for decryption
+		nonce = onion[:12]
+		ciphertext = onion[12:]
+		plaintext = ciphers[i].decrypt(nonce, ciphertext, None)
+		onion = plaintext
+	return onion
+	
+	
+	
 def cipher_gen():
 	aesgcm1 = AESGCM(bytes.fromhex(KEYS[0]))
 	aesgcm2 = AESGCM(bytes.fromhex(KEYS[1]))
