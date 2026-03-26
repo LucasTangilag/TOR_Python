@@ -41,15 +41,17 @@ def run_relay(host, cipher):
 			ciphertext = raw_msg[12:]
             
 			# decrypt
-			plaintext = cipher.decrypt(nonce, ciphertext, None).decode()
+			plaintext = cipher.decrypt(nonce, ciphertext, None)
+			print(f"[PID {os.getpid()}] Decrypted Message {plaintext}", flush=True)
             
-			if "|" not in plaintext:
+			if b"|" not in plaintext:
 				print(f"[PID {os.getpid()}] Malformed message from {addr}: {raw_msg}", flush=True)
 				break
             
-			# if this is not the exit node, the raw message should be "next_IP|message"
-			# otherwise, if this *IS* the exit, it's "FINAL|message"
-			next_hop, msg = raw_msg.split("|", 1)
+			# split into next hop and remaining payload
+			split_idx = plaintext.index(b"|")
+			next_hop = plaintext[:split_idx].decode()
+			msg = plaintext[split_idx + 1:]  
            
 			# if this is the exit node, start responding back to client
 			if next_hop == "FINAL":
@@ -65,7 +67,7 @@ def run_relay(host, cipher):
 			next_conn.bind((host, 0))
 			next_conn.connect((next_hop, PORT))
 			print(f"[PID {os.getpid()}] Forwarding to {next_hop}:{PORT} -> {f"{msg}"}", flush=True)
-			next_conn.sendall(msg.encode())
+			next_conn.sendall(msg)
 
 			# send response back to previous relay
 			response = next_conn.recv(4096)
