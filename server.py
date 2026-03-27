@@ -6,6 +6,10 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 PORT = 8000 # fixed for now
 
+# encryption toggle (for testing)
+# make sure that client.py and server.py have the same value for this variable
+USE_ENCRYPTION = True
+
 # for decrypting different layers
 KEYS = ["b9d3caba51860cafb725bfc0fcf3417f32975bfb4cb3079da443d8654048f5ae", "7b556e69ea5185904294f0fa86b81e822c2d9a4e688959afc5ec12bd5cb7fa39", "3a41a49e99b6921874c23104d4957e153319521ff9211a41721df79929dff54d"]
 
@@ -56,13 +60,16 @@ def run_relay(host, cipher):
             
 			raw_msg = data
             
-			# extract nonce for decryption
-			nonce = raw_msg[:12]
-			ciphertext = raw_msg[12:]
+			if USE_ENCRYPTION:
+				# extract nonce for decryption
+				nonce = raw_msg[:12]
+				ciphertext = raw_msg[12:]
             
-			# decrypt
-			plaintext = cipher.decrypt(nonce, ciphertext, None)
-			print(f"[PID {os.getpid()}] Decrypted Message {plaintext}", flush=True)
+				# decrypt
+				plaintext = cipher.decrypt(nonce, ciphertext, None)
+				print(f"[PID {os.getpid()}] Decrypted Message {plaintext}", flush=True)
+			else:
+				plaintext = raw_msg
             
 			if b"|" not in plaintext:
 				print(f"[PID {os.getpid()}] Malformed message from {addr}: {raw_msg}", flush=True)
@@ -136,15 +143,19 @@ def run_relay(host, cipher):
 
 
 def backward_encryption(cipher, message):
-	# encrpyt a message with a nonce and key
-	nonce = os.urandom(12)
 	
-	# if message is a string encode, if not then dont
-	if isinstance(message, str):
-		message = message.encode()
+	if USE_ENCRYPTION:
+		# encrpyt a message with a nonce and key
+		nonce = os.urandom(12)
+	
+		# if message is a string encode, if not then dont
+		if isinstance(message, str):
+			message = message.encode()
         
-	layer = nonce + cipher.encrypt(nonce, message, None)
-	return layer
+		layer = nonce + cipher.encrypt(nonce, message, None)
+		return layer
+	
+	return message # if not using encryption
 
 def parse_ips():
 	args = sys.argv[1:]

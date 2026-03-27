@@ -3,6 +3,10 @@ import os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from urllib.parse import urlparse
 
+# encryption toggle (for testing)
+# make sure that client.py and server.py have the same value for this variable
+USE_ENCRYPTION = True
+
 # hard-coded relays for now
 ENTRY = "127.0.0.2"
 MIDDLE = "127.0.0.3"
@@ -46,10 +50,24 @@ def is_URL_input_ok(url):
     except ValueError:
         return False
 
+# banner
+def colored_ascii():
+    GREEN = "\033[92m"
+    RESET = "\033[0m"
+
+    print(f"{GREEN}" + r"""
+       ______ ____   ____ 
+      /_  __// __ \ / __ \
+       / /  / / / // /_/ /
+      / /  / /_/ // _, _/ 
+     /_/   \____//_/ |_|  
+    """ + f"{RESET}")
+
 def main():
     ciphers = cipher_gen()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((ENTRY, PORT))
+    colored_ascii()
     print(f"Connected to entry node {ENTRY}:{PORT}")
 
     while True:
@@ -71,17 +89,22 @@ def main():
 
         response = decrypt_response(raw, ciphers)
         print(f"\n--- Response ---\n{response.decode(errors='replace')}")
+  
 
 def decrypt_response(data, ciphers):
-	# decrypt each layer
-	onion = data
-	for i in range(3):
+    # decrypt each layer
+
+    if not USE_ENCRYPTION:
+        return data
+
+    onion = data
+    for i in range(3):
 		# extract nonce for decryption
-		nonce = onion[:12]
-		ciphertext = onion[12:]
-		plaintext = ciphers[i].decrypt(nonce, ciphertext, None)
-		onion = plaintext
-	return onion
+        nonce = onion[:12]
+        ciphertext = onion[12:]
+        plaintext = ciphers[i].decrypt(nonce, ciphertext, None)
+        onion = plaintext
+    return onion
 	
 	
 	
@@ -107,6 +130,12 @@ def construct_message(url, ciphers):
         f"Connection: close\r\n"
         f"\r\n"
     ).encode()
+
+    if not USE_ENCRYPTION:
+        payload3 = f"FINAL|{host}:{port}|".encode() + http_req
+        layer2 = f"{EXIT}|".encode() + payload3
+        layer1 = f"{MIDDLE}|".encode() + layer2
+        return layer1
 
     # innermost layer with the actual destination
     payload3 = f"FINAL|{host}:{port}|".encode() + http_req
