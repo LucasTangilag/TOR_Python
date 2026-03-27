@@ -9,6 +9,28 @@ PORT = 8000 # fixed for now
 # for decrypting different layers
 KEYS = ["b9d3caba51860cafb725bfc0fcf3417f32975bfb4cb3079da443d8654048f5ae", "7b556e69ea5185904294f0fa86b81e822c2d9a4e688959afc5ec12bd5cb7fa39", "3a41a49e99b6921874c23104d4957e153319521ff9211a41721df79929dff54d"]
 
+# the following 3 helpers were adapted from https://stackoverflow.com/questions/17667903/python-socket-receive-large-amount-of-data 
+# they were used to determine message boundaries (since when the HTTP response is sent back, encrypted, 
+# and re-wrapped as an 'onion', it might eventually overflow the recv buffer)
+def send_msg(sock, data: bytes):
+    sock.sendall(len(data).to_bytes(4, 'big') + data) # 'big' is big endian
+
+def _recvall(sock, n):
+	buf = b""
+	while len(buf) < n:
+		chunk = sock.recv(n - len(buf))
+		if not chunk:
+			return None
+		buf += chunk
+	return buf
+
+def recv_msg(sock):
+	raw_len = _recvall(sock, 4)
+	if not raw_len:
+		return None 
+	length = int.from_bytes(raw_len, 'big')
+	return _recvall(sock, length)
+
 # start relay
 def run_relay(host, cipher):
 	# set up lister for host
@@ -27,13 +49,11 @@ def run_relay(host, cipher):
 		while True:
 
 			# receive from previous relay
-			data = prev_conn.recv(4096)
+			data = recv_msg(prev_conn)
 			if not data:
 				break
 			print(f"[PID {os.getpid()}] Received from {addr}: {data}", flush=True)
             
-			# 'peel' onion layer from received data
-			# assumes protocol is "next_IP|message" 
 			raw_msg = data
             
 			# extract nonce for decryption
@@ -48,34 +68,68 @@ def run_relay(host, cipher):
 				print(f"[PID {os.getpid()}] Malformed message from {addr}: {raw_msg}", flush=True)
 				break
             
+			# 'peel' onion layer from received data
+			# assumes protocol is "next_IP|message" 
 			# split into next hop and remaining payload
 			split_idx = plaintext.index(b"|")
 			next_hop = plaintext[:split_idx].decode()
 			msg = plaintext[split_idx + 1:]  
            
-			# if this is the exit node, start responding back to client
+			# if this is the exit node, start the HTTP request
 			if next_hop == "FINAL":
-				print(f"[PID {os.getpid()}] Final destination reached with message: {msg}", flush=True)
+
+				split_dest = msg.index(b"|")
+				dest = msg[:split_dest].decode()
+				http_request = msg[split_dest + 1:]
+
+				dest_IP, dest_port = dest.rsplit(":", 1)
+		  
+				print(f"[PID {os.getpid()}] Exit Node: connecting to {dest_IP}:{dest_port}", flush=True)
+
+				#connect to the dest server
+				try:
+					server_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+					server_conn.connect((dest_IP, int(dest_port)))
+					server_conn.sendall(http_request)
+					
+					server_response = b""
+					while True:
+						temp_rec = server_conn.recv(4096)
+						if not temp_rec:
+							break
+						server_response += temp_rec
+					server_conn.close()
+
+					print(f"[PID {os.getpid()}] Exit Node: received {server_response} from {dest_IP}:{dest_port}", flush=True)
+
+					# now pipe it back to the client
+					enc_response = backward_encryption(cipher, server_response)
+					send_msg(prev_conn, enc_response)
+					break
+					
+				except Exception as e:
+					print(f"[PID {os.getpid()}] Failed to connect to destination {e}", flush=True)
+					break
                 
-				# get server response, encrypt, and send back
-				response = f"You've successfully reached {host} with message: {msg}"
-				enc_response = backward_encryption(cipher, response)
-				print(f"[PID {os.getpid()}] Send back -> {f"{enc_response}"}", flush=True)
-				prev_conn.sendall(enc_response)
-				break
+				# # get server response, encrypt, and send back
+				# response = f"You've successfully reached {host} with message: {msg.decode()}"
+				# enc_response = backward_encryption(cipher, response)
+				# print(f"[PID {os.getpid()}] Send back -> {f"{enc_response}"}", flush=True)
+				# prev_conn.sendall(enc_response)
+				# break
             
 			# otherwise, forward to next hop
 			next_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			next_conn.bind((host, 0))
 			next_conn.connect((next_hop, PORT))
 			print(f"[PID {os.getpid()}] Forwarding to {next_hop}:{PORT} -> {f"{msg}"}", flush=True)
-			next_conn.sendall(msg)
+			send_msg(next_conn, msg)
 
 			# ecrypt and send response back to previous relay
-			response = next_conn.recv(4096)
+			response = recv_msg(next_conn)
 			enc_response = backward_encryption(cipher, response)
 			print(f"[PID {os.getpid()}] Send back -> {f"{enc_response}"}", flush=True)
-			prev_conn.sendall(enc_response)
+			send_msg(prev_conn, enc_response)
 
             
 		prev_conn.close()
