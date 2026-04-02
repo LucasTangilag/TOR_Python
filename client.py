@@ -1,16 +1,17 @@
 import socket
 import os
+from time import time
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from urllib.parse import urlparse
 
 # encryption toggle (for testing)
 # make sure that client.py and server.py have the same value for this variable
-USE_ENCRYPTION = True
+USE_ENCRYPTION = False
 
 # hard-coded relays for now
-ENTRY = "127.0.0.2"
-MIDDLE = "127.0.0.3"
-EXIT = "127.0.0.4" 
+ENTRY = "entry"
+MIDDLE = "middle"
+EXIT = "exit"
 PORT = 8000 # We can re-use this if we have different hosts 
 
 # for encryption layers
@@ -66,7 +67,17 @@ def colored_ascii():
 def main():
     ciphers = cipher_gen()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((ENTRY, PORT))
+    # s.connect((ENTRY, PORT))
+
+    connected = False
+    while not connected:
+        try:
+            s.connect((ENTRY, PORT))
+            connected = True
+        except ConnectionRefusedError:
+            print("Entry node not ready, retrying in 2 seconds...")
+            time.sleep(2)
+
     colored_ascii()
     print(f"Connected to entry node {ENTRY}:{PORT}")
 

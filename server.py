@@ -8,7 +8,7 @@ PORT = 8000 # fixed for now
 
 # encryption toggle (for testing)
 # make sure that client.py and server.py have the same value for this variable
-USE_ENCRYPTION = True
+USE_ENCRYPTION = False
 
 # for decrypting different layers
 KEYS = ["b9d3caba51860cafb725bfc0fcf3417f32975bfb4cb3079da443d8654048f5ae", "7b556e69ea5185904294f0fa86b81e822c2d9a4e688959afc5ec12bd5cb7fa39", "3a41a49e99b6921874c23104d4957e153319521ff9211a41721df79929dff54d"]
@@ -40,9 +40,14 @@ def run_relay(host, cipher):
 	# set up lister for host
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	s.bind((host, PORT))
+	# s.bind((host, PORT))
+	# s.listen()
+	# print(f"[PID {os.getpid()}] Relay listening on {host}:{PORT}", flush=True)
+
+	s.bind(('0.0.0.0', PORT)) 
 	s.listen()
-	print(f"[PID {os.getpid()}] Relay listening on {host}:{PORT}", flush=True)
+	print(f"[PID {os.getpid()}] Relay listening on all interfaces at port {PORT}", flush=True)
+    # ... rest of the function
 
 	while True:
 

@@ -1,0 +1,56 @@
+networks:
+  tor-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+services:
+  entry:
+    build: .
+    command: python server.py 172.20.0.2
+    networks:
+      tor-net:
+        ipv4_address: 172.20.0.2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('172.20.0.2', 8000), timeout=2)"]
+      interval: 3s
+      retries: 5
+
+  middle:
+    build: .
+    command: python server.py 172.20.0.3
+    networks:
+      tor-net:
+        ipv4_address: 172.20.0.3
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('172.20.0.3', 8000), timeout=2)"]
+      interval: 3s
+      retries: 5
+
+  exit:
+    build: .
+    command: python server.py 172.20.0.4
+    networks:
+      tor-net:
+        ipv4_address: 172.20.0.4
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('172.20.0.4', 8000), timeout=2)"]
+      interval: 3s
+      retries: 5
+
+  client:
+    build: .
+    command: python client.py
+    stdin_open: true
+    tty: true
+    depends_on:
+      entry:
+        condition: service_healthy
+      middle:
+        condition: service_healthy
+      exit:
+        condition: service_healthy
+    networks:
+      tor-net:
+        ipv4_address: 172.20.0.10
