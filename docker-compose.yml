@@ -1,56 +1,51 @@
+version: "3.8"
+
 networks:
-  tor-net:
+  tor_net:
     driver: bridge
     ipam:
       config:
         - subnet: 172.20.0.0/24
 
 services:
+
   entry:
     build: .
-    command: python server.py 172.20.0.2
+    container_name: entry-1
+    command: python server.py 0 172.20.0.2
     networks:
-      tor-net:
+      tor_net:
         ipv4_address: 172.20.0.2
-    healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('172.20.0.2', 8000), timeout=2)"]
-      interval: 3s
-      retries: 5
 
   middle:
     build: .
-    command: python server.py 172.20.0.3
+    container_name: middle-1
+    command: python server.py 1 172.20.0.3
     networks:
-      tor-net:
+      tor_net:
         ipv4_address: 172.20.0.3
-    healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('172.20.0.3', 8000), timeout=2)"]
-      interval: 3s
-      retries: 5
+    depends_on:
+      - entry
 
   exit:
     build: .
-    command: python server.py 172.20.0.4
+    container_name: exit-1
+    command: python server.py 2 172.20.0.4
     networks:
-      tor-net:
+      tor_net:
         ipv4_address: 172.20.0.4
-    healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('172.20.0.4', 8000), timeout=2)"]
-      interval: 3s
-      retries: 5
+    depends_on:
+      - middle
 
   client:
     build: .
+    container_name: client-1
     command: python client.py
     stdin_open: true
     tty: true
-    depends_on:
-      entry:
-        condition: service_healthy
-      middle:
-        condition: service_healthy
-      exit:
-        condition: service_healthy
     networks:
-      tor-net:
-        ipv4_address: 172.20.0.10
+      - tor_net
+    depends_on:
+      - entry
+      - middle
+      - exit
