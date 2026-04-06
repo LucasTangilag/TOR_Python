@@ -1,14 +1,18 @@
 # TOR_Python
 
-# BUILDING WITH DOCKER:
+# Requires docker, docker compose (or docker-compose), and pytest
+
+# IF you are using docker desktop, please open the desktop application before
+# running the commands below
+
+
+# BUILDING & RUNNING WITH DOCKER:
 docker compose build
 docker compose up entry middle exit
 docker compose run --rm client
 
+# If you are using the legacy version of docker compose, you may need to 
+# use "docker-compose" in the above commands
 
-# Setup Alias IPs for Relay
-
-## Linux
-sudo ip addr add 127.0.0.2/8 dev lo
-sudo ip addr add 127.0.0.3/8 dev lo
-sudo ip addr add 127.0.0.4/8 dev lo
+# INTEGRATION TEST:
+pytest test_integration.py
