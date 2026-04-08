@@ -22,3 +22,5 @@ $ docker compose run --rm client
 ```
 $ pytest test_integration.py
 ```
+
+The Wireshark packet screenshots found in the report were produced using [this](https://github.com/LucasTangilag/TOR_Python/blob/main/tor_packet_capture.pcapng) packet capture.
